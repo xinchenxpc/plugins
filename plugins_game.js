@@ -346,18 +346,30 @@ mc.listen('onServerStarted', () => {
         fun(mob);
         gameData.Health = true;
     });
-    mc.listen("onBlockExploded",(bl,_en)=>{
+    mc.listen("onBlockExploded",(bl,_en)=>{//方块被爆炸破坏
+        if(gameData.game_prepare){
         if(bl.type!='minecraft:wool'){
         mc.setBlock(bl.pos,bl);
+        }
+    }
+    });
+    mc.listen("onDestroyBlock",(pl,bl)=>{
+        if(gameData.game_prepare){
+            return false;
         }
     });
 
     let funEat = Tools.exeOnceAtTime((pl, it) => {//吃东西
         //减少物品
+        if(it.count==1){
+            it.setNull();
+        }
+        else{
         let itnew = mc.newItem(it.type, (it.count - 1));
         it.set(itnew);
         pl.refreshItems();
         mc.runcmdEx(`effect "${pl.name}" speed 15 1 false`);
+        }
     }, 2000);
 
     let fun = Tools.exeOnceAtTime((pl) => {//回血
@@ -373,7 +385,7 @@ mc.listen('onServerStarted', () => {
                 }
             }
         }, 200);
-    }, 5000);
+    }, 8000);//回血延迟时间
     /**
      * 准备
      */
@@ -786,13 +798,15 @@ mc.listen('onServerStarted', () => {
             case 0:
                 if (money.get(pl.xuid) >= 15) {
                     let item = mc.newItem('minecraft:wool', 16);
-                    if (pl.hasTag('red_ranks')) {
-                        item.setAux(1);
+                    if (pl.hasTag('red_ranks')) {//设置数据值API不能用
+                        //item.setAux(1);
+                        mc.runcmdEx(`give ${pl.name} wool 16 13`);
                     }
                     if (pl.hasTag('blue_ranks')) {
-                        item.setAux(2);
+                        //item.setAux(2);
+                        mc.runcmdEx(`give ${pl.name} wool 16 11`);
                     }
-                    pl.giveItem(item);
+                    //pl.giveItem(item);
                     pl.tell('§o§7已购买§l§a方块*16');
                     money.reduce(pl.xuid, 15);
                     break;
