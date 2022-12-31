@@ -1,3 +1,14 @@
+//LiteLoaderScript Dev Helper
+/// <reference path="d:\project/dts/llaids/src/index.d.ts"/> 
+
+ll.registerPlugin(
+    /* name */ "CTF",
+    /* introduction */ "CTF 夺旗 跨年小游戏项目",
+    /* version */ [0,0,1],
+    /* otherInformation */ {}
+); 
+
+
 
 //导入函数
 try {
@@ -9,6 +20,7 @@ catch (e) {
 }
 
 //conf = new KVDatabase('./plugins/game');
+var version = '6';//这个还要用
 var game_start = false;
 var RedGameTime = 0;
 var BlueGameTime = 0;
@@ -22,7 +34,8 @@ const gameData = {
     loop_red: false,
     loop_blue: false,
     setIntervalList: [],
-    Health: false
+    Health: false,
+    RespawnTime: 8
 }
 /**
  * 重置
@@ -35,9 +48,14 @@ gameData.reload = function () {
         gameData.BlueGameTime = 0,
         gameData.loop_red = false,
         gameData.loop_blue = false,
-        gameData.setIntervalList = []
+        gameData.setIntervalList = [],
+        gameData.Health = false,
+        gameData.RespawnTime = 8
 }
 
+if (mc.getServerProtocolVersion() > 545) {//判断版本以兼容1.19.30
+    version = 'spectator';
+}
 /**
  * 范围时间内只执行一次
  */
@@ -199,11 +217,15 @@ mc.listen('onServerStarted', () => {
         conf.set('pos2', []);
         conf.set('rad_flag', '');
         conf.set('blue_flag', '');
+        conf.set('red_clothes', []);
+        conf.set('blue_clothes', []);
         conf.set('inspect', true);
         conf.set('score', {}); //计分板
     }
     conf.set('score', {}); //计分板需要重置
     conf.close();
+
+    mc.runcmdEx('gamerule doimmediaterespawn true');//立即重生
 
     //初始化计分板
     var ob_flag = new Score('flag');
@@ -233,12 +255,17 @@ mc.listen('onServerStarted', () => {
     cmd.setEnum('b', ['set']);
     cmd.setEnum('d', ['xyz']);
     cmd.setEnum('c', ['blue', 'red']);
+    cmd.setEnum('g', ['debug']);
+    cmd.setEnum('h', ['get']);
     cmd.mandatory("action", ParamType.Enum, "a", 1);
     cmd.mandatory("op", ParamType.Enum, "b", 1);
     cmd.mandatory("flag", ParamType.Enum, "c", 1);
     cmd.mandatory("xyz", ParamType.Enum, "d", 1);
     cmd.mandatory("start", ParamType.Enum, "e", 1);
     cmd.mandatory("stop", ParamType.Enum, "f", 1);
+    cmd.mandatory("debug", ParamType.Enum, "g", 1);
+    cmd.mandatory("get", ParamType.Enum, "h", 1);
+    cmd.overload(['debug','get','flag']);
     cmd.overload(['action']);
     cmd.overload(['start']);
     cmd.overload(['stop']);
@@ -247,9 +274,33 @@ mc.listen('onServerStarted', () => {
     cmd.setup();
     cmd.setCallback((_cmd, ori, out, res) => {
 
+        if(res['debug'] == 'debug'){
+            if(res['get'] == 'get'){
+                if(res['flag'] == 'red'){//获取两队衣服NBTjson字符串
+                    let conf = new KVDatabase('./plugins/game');
+                    let itemlist =ori.player.getArmor().getAllItems();
+                    let itemListNew = [];
+                    for(let i = 0; i < itemlist.length; i++){
+                        itemListNew.push(itemlist[i].getNbt().toSNBT());
+                    }
+                    conf.set('red_clothes', itemListNew);
+                    conf.close();
+                }
+                if(res['flag'] == 'blue'){
+                    let conf = new KVDatabase('./plugins/game');
+                    let itemlist =ori.player.getArmor().getAllItems();
+                    let itemListNew = [];
+                    for(let i = 0; i < itemlist.length; i++){
+                        itemListNew.push(itemlist[i].getNbt().toSNBT());
+                    }
+                    conf.set('blue_clothes', itemListNew);
+                    conf.close();
+                }
+            }
+        }
         if (res['op'] == 'set') {
             if (res['xyz'] == 'xyz') {
-                if (res['flag'] == 'red') {
+                if (res['flag'] == 'red') {//设置两队旗帜生成坐标
                     let conf = new KVDatabase('./plugins/game');
                     conf.set('pos1', [ori.player.blockPos.x, ori.player.blockPos.y, ori.player.blockPos.z]);
                     out.success(`设置成功 ${String(ori.player.blockPos.x)} ${String(ori.player.blockPos.y)} ${String(ori.player.blockPos.z)}`);
@@ -262,7 +313,7 @@ mc.listen('onServerStarted', () => {
                     conf.close();
                 }
             }
-            else if (res['flag'] == 'blue') {
+            else if (res['flag'] == 'blue') {//设置两队旗帜样式 NBTjson
                 let conf = new KVDatabase('./plugins/game');
                 log(ori.player.getHand().getNbt().toSNBT());
                 data = 'aa';
@@ -277,7 +328,7 @@ mc.listen('onServerStarted', () => {
                 conf.close();
             }
         }
-        if (res['action'] == 'prepare') {
+        if (res['action'] == 'prepare') {//准备游戏
             if (!gameData.game_prepare) {
                 game_prepare();
                 gameData.game_prepare = true;
@@ -286,11 +337,11 @@ mc.listen('onServerStarted', () => {
                 out.success('你不能在游戏结束前重复执行此命令')
             }
         }
-        if (res['start'] == 'start') {
+        if (res['start'] == 'start') {//开始游戏
             gameData.game_start = true;
 
         }
-        if (res['stop'] == 'stop') {
+        if (res['stop'] == 'stop') {//强制停止游戏
             gameEnd()
         }
         //conf.close();
@@ -318,11 +369,30 @@ mc.listen('onServerStarted', () => {
                     player.addScore('kill', 1);
                 }
             }
+            let id2 = setTimeout(() => {
+                mc.runcmdEx(`tp ${pl.name} ${pl.pos.x} ${pl.pos.y} ${pl.pos.z} ~`);
+                mc.runcmdEx(`title ${pl.name} title §c§l你死了`);
+                mc.runcmdEx(`gamemode c ${pl.name}`);
+                mc.runcmdEx(`gamemode ${version} ${pl.name}`);//version是旁观模式
+            }, 500);
         }
         return true;
     });
     mc.listen('onRespawn', (pl) => {
-        pl.removeTag('die');
+        let id, id2, restime = gameData.RespawnTime;
+        id = setTimeout(() => {
+            mc.runcmdEx(`gamemode s ${pl.name}`);
+            pl.removeTag('die');
+        }, gameData.RespawnTime);
+        id2 = setInterval(() => {
+            if (restime > 0) {
+                pl.tell(`§a${restime}§r秒后复活`,5);
+                restime--;
+            }
+            else{
+                clearInterval(id2);
+            }
+        }, 1000);
     });
     mc.listen('onAttackEntity', (pl, en) => {
         if (en.hasTag('shop')) {
@@ -346,29 +416,29 @@ mc.listen('onServerStarted', () => {
         fun(mob);
         gameData.Health = true;
     });
-    mc.listen("onBlockExploded",(bl,_en)=>{//方块被爆炸破坏
-        if(gameData.game_prepare){
-        if(bl.type!='minecraft:wool'){
-        mc.setBlock(bl.pos,bl);
+    mc.listen("onBlockExploded", (bl, _en) => {//方块被爆炸破坏
+        if (gameData.game_prepare) {
+            if (bl.type != 'minecraft:wool') {
+                mc.setBlock(bl.pos, bl);
+            }
         }
-    }
     });
-    mc.listen("onDestroyBlock",(pl,bl)=>{
-        if(gameData.game_prepare){
+    mc.listen("onDestroyBlock", (pl, bl) => {
+        if (gameData.game_prepare) {
             return false;
         }
     });
 
     let funEat = Tools.exeOnceAtTime((pl, it) => {//吃东西
         //减少物品
-        if(it.count==1){
+        if (it.count == 1) {
             it.setNull();
         }
-        else{
-        let itnew = mc.newItem(it.type, (it.count - 1));
-        it.set(itnew);
-        pl.refreshItems();
-        mc.runcmdEx(`effect "${pl.name}" speed 15 1 false`);
+        else {
+            let itnew = mc.newItem(it.type, (it.count - 1));
+            it.set(itnew);
+            pl.refreshItems();
+            mc.runcmdEx(`effect "${pl.name}" speed 15 1 false`);
         }
     }, 2000);
 
@@ -474,6 +544,8 @@ mc.listen('onServerStarted', () => {
         log('game_start');
         pos3 = conf.get('pos1');
         pos4 = conf.get('pos2');
+        let red_clothes = conf.get('red_clothes');
+        let blue_clothes = conf.get('blue_clothes');
         conf.close();
         log(pos4[0], pos4[1], pos4[2]);
         const pos1 = mc.newIntPos(pos3[0], pos3[1], pos3[2], 0);
@@ -485,7 +557,14 @@ mc.listen('onServerStarted', () => {
         ob_flag.setScore("red", 0);
         ob_flag.setScore("blue", 0);
 
-        for (let j = 0; j < player_list.length; j++) {
+        //适配新版1.19.50 execute
+        var execute_cmd_blue = 'execute @a[name=blue] ~ ~ ~ tag @a[r=0.5,tag=red_ranks] add red_carry';
+        if (mc.getServerProtocolVersion() >= 560) {//判断版本以兼容1.19.50
+            execute_cmd_blue = 'execute as @a[name=blue] positioned ~ ~ ~ run tag @a[r=0.5,tag=red_ranks] add red_carry';
+        }
+
+        for (let j = 0; j < player_list.length; j++) {//初始化队伍信息
+            let pl_ct = player_list[j].getArmor();
             player_list[j].removeSidebar();
             player_list[j].removeTag('die');
             player_list[j].removeTag('red_carry');
@@ -493,11 +572,26 @@ mc.listen('onServerStarted', () => {
             money.set(player_list[j].xuid, 0);
             ob_kill.setScore(player_list[j], 0);
             ob_die.setScore(player_list[j], 0);
+
+            //设置衣服
+            if(player_list[j].hasTag('red_ranks')){
+                for(let i = 0; i < red_clothes.length; i++){
+                    pl_ct.setItem(i,mc.newItem(NBT.parseSNBT(red_clothes[i])));
+                }
+            }
+            if(player_list[j].hasTag('blue_ranks')){
+                for(let i = 0; i < blue_clothes.length; i++){
+                    pl_ct.setItem(i,mc.newItem(NBT.parseSNBT(blue_clothes[i])));
+                }
+            }
+            player_list[j].refreshItems();
         }
         let playerXuidList = [];
         for (let j = 0; j < player_list.length; j++) {
             playerXuidList.push(player_list[j].xuid)
         }
+
+        //分配队伍衣服
 
         //let id1 = tp_start(red, pos1);
         //let id2 = tp_start(blue, pos2)
@@ -548,6 +642,7 @@ mc.listen('onServerStarted', () => {
             for (let k = 0; k < player_list.length; k++) {
                 if (!hasTagAll('red_carry')/*player_list[k].hasTag('red_carry')*/) {//蓝队丢失
                     if (!hasTagAll('die')) {
+
                         mc.runcmdEx('execute @a[name=blue] ~ ~ ~ tag @a[r=0.5,tag=red_ranks] add red_carry');
                         loop_red = true;
                         for (let j = 0; j < player_list.length; j++) {
@@ -834,7 +929,7 @@ mc.listen('onServerStarted', () => {
                 }
             case 4:
                 if (money.get(pl.xuid) >= 100) {
-                    
+
                     break;
                 }
         }
