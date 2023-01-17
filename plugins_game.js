@@ -457,7 +457,7 @@ mc.listen('onServerStarted', () => {
             }
             return false;
         }
-        if(en.hasTag('shop2')){//增益商店
+        if (en.hasTag('shop2')) {//增益商店
             if (gameData.game_start) {
                 pl.sendForm(form2(), (pl, id) => {
                     form2Rt(pl, id);
@@ -485,6 +485,8 @@ mc.listen('onServerStarted', () => {
     //tnt爆炸
     mc.listen("onBlockChanged", (bl, bl2) => {//方块被爆炸破坏保护
         if (gameData.game_prepare) {
+            //log(bl.type != 'minecraft:wool' || bl.type != 'minecraft:tnt');
+            //log(bl.type != 'minecraft:wool');
             if (bl.type != 'minecraft:wool' || bl.type != 'minecraft:tnt') {
                 if (bl2.type == 'minecraft:air') {
                     mc.setBlock(bl.pos, bl);
@@ -492,11 +494,13 @@ mc.listen('onServerStarted', () => {
                 }
             }
         }
+
     });
     mc.listen("onEntityExplode", (_en, pos, _ra, _a, _b, _c) => {
         if (gameData.game_prepare) {
-
-            mc.runcmdEx(`execute positioned ${pos.x} ${pos.y} ${pos.z} run kill @e[r=8},type=item]`);
+            setTimeout(() => {
+                mc.runcmdEx(`execute positioned ${pos.x} ${pos.y} ${pos.z} run kill @e[r=8},type=item]`);
+            }, 100);
         }
     });
     mc.listen("onDestroyBlock", (pl, bl) => {
@@ -504,7 +508,7 @@ mc.listen('onServerStarted', () => {
             return false;
         }
     });
-    
+
     //tnt自动点燃实现
     mc.listen("afterPlaceBlock", (pl, bl) => {//玩家放置方块
         if (gameData.game_start) {
@@ -527,43 +531,43 @@ mc.listen('onServerStarted', () => {
     mc.listen('onMobHurt', (m, s, d, c) => {//实体受伤
         if (m.isPlayer()) {
             //防止被自己队伍的tnt炸到
-            if(m.hasTag('red_ranks' && s.name=='red_tnt'){
+            if (m.hasTag('red_ranks') && s.name == 'red_tnt') {
                 return false;
             }
-            if(m.hasTag('blue_ranks' && s.name=='blue_tnt'){
+            if (m.hasTag('blue_ranks') && s.name == 'blue_tnt') {
                 return false;
             }
         }
     });
-    
-    mc.listen("onProjectileHitBlock",(bl,en)=>{//方块被弹射物击中
-        if(bl.type=='minecraft:wool'){//只能破坏羊毛
-        if(en.hasTag('red_arrow')){
-            if(shopRed.arrowEnhance==false){
-                bl.destroy(false);//破坏改方块
-                en.kill();
+
+    mc.listen("onProjectileHitBlock", (bl, en) => {//方块被弹射物击中
+        if (bl.type == 'minecraft:wool') {//只能破坏羊毛
+            if (en.hasTag('red_arrow')) {
+                if (shopRed.arrowEnhance == false) {
+                    bl.destroy(false);//破坏改方块
+                    en.kill();
+                }
+                else {
+
+                }
             }
-            else{
-                
+            if (en.hasTag('blue_arrow')) {
+                if (shopBlue.arrowEnhance == false) {
+                    bl.destroy(false);//破坏改方块
+                    en.kill();
+                }
+                else {
+
+                }
             }
-        }
-        if(en.hasTag('blue_arrow')){
-            if(shopBlue.arrowEnhance==false){
-                bl.destroy(false);//破坏改方块
-                en.kill();
-            }
-            else{
-                
-            }
-        }
         }
     });
-    mc.listen("onProjectileCreated",(shooter,en)=>{//弹射物创建完毕
+    mc.listen("onProjectileCreated", (shooter, en) => {//弹射物创建完毕
         //给弹射物依据玩家标签增加标签
-        if(shooter.hasTag('red_ranks')){
+        if (shooter.hasTag('red_ranks')) {
             en.addTag('red_arrow');
         }
-        if(shooter.hasTag('blue_ranks')){
+        if (shooter.hasTag('blue_ranks')) {
             en.addTag('blue_arrow');
         }
     });
@@ -1011,7 +1015,7 @@ mc.listen('onServerStarted', () => {
             gameData.game_prepare = true;
             setTimeout(game_prepare, 800);
             game_prepare();
-            
+        }
     }
 
     /**
@@ -1141,42 +1145,42 @@ mc.listen('onServerStarted', () => {
             pl[i].refreshItems();
         }
         gameData.reload();//重置游戏变量
-        shop.reload();//重置增益商店变量
+        shopReload();//重置增益商店变量
     }
-    
+
     //增益商店变量
     var shopRed = {
-        arrowEnhance = false;
-        blockEnhance = false;
-        absorption = false;//伤害吸收
-        rapidRebirth = false;//快速重生
-        flagCurse = false;//旗帜诅咒
+        arrowEnhance: false,
+        blockEnhance: false,
+        absorption: false,//伤害吸收
+        rapidRebirth: false,//快速重生
+        flagCurse: false//旗帜诅咒
     }
     var shopBlue = {
-        arrowEnhance = false;
-        blockEnhance = false;
-        absorption = false;//伤害吸收
-        rapidRebirth = false;//快速重生
-        flagCurse = false;//旗帜诅咒
+        arrowEnhance: false,
+        blockEnhance: false,
+        absorption: false,//伤害吸收
+        rapidRebirth: false,//快速重生
+        flagCurse: false//旗帜诅咒
     }
     //重置变量函数
-    var shop.reload = function (){
+    var shopReload = function () {
         shopBlue = {
-        arrowEnhance = false;
-        blockEnhance = false;
-        absorption = false;//伤害吸收
-        rapidRebirth = false;//快速重生
-        flagCurse = false;//旗帜诅咒
+            arrowEnhance: false,
+            blockEnhance: false,
+            absorption: false,//伤害吸收
+            rapidRebirth: false,//快速重生
+            flagCurse: false//旗帜诅咒
+        }
+        shopRed = {
+            arrowEnhance: false,
+            blockEnhance: false,
+            absorption: false,//伤害吸收
+            rapidRebirth: false,//快速重生
+            flagCurse: false//旗帜诅咒
+        }
     }
-    shopRed = {
-        arrowEnhance = false;
-        blockEnhance = false;
-        absorption = false;//伤害吸收
-        rapidRebirth = false;//快速重生
-        flagCurse = false;//旗帜诅咒
-    }
-    }
-    
+
     /**
      * 增益商店表单
      */
@@ -1191,16 +1195,15 @@ mc.listen('onServerStarted', () => {
         fm = fm.addButton('§l§a旗帜诅咒\n§l§e200经济');
         return fm;
     }
-    function form2Rt(pl,id){
+    function form2Rt(pl, id) {
         let playerList = mc.getOnlinePlayers();//获取在线玩家
 
         if (id != null) {
-            pl.sendForm(form(), formRt);
+            pl.sendForm(form2(), form2Rt);
         }
         switch (id) {
             case 0:
                 if (money.get(pl.xuid) >= 125) {
-                    if(
                     pl.tell('§o§7已购买§l§a箭升级');
                     money.reduce(pl.xuid, 125);
                     break;
