@@ -482,7 +482,7 @@ mc.listen('onServerStarted', () => {
         gameData.Health = true;
     });
 
-    //-要重写－//
+    //tnt爆炸
     mc.listen("onBlockChanged", (bl, bl2) => {//方块被爆炸破坏保护
         if (gameData.game_prepare) {
             if (bl.type != 'minecraft:wool' || bl.type != 'minecraft:tnt') {
@@ -504,7 +504,8 @@ mc.listen('onServerStarted', () => {
             return false;
         }
     });
-
+    
+    //tnt自动点燃实现
     mc.listen("afterPlaceBlock", (pl, bl) => {//玩家放置方块
         if (gameData.game_start) {
             if (bl.type == 'minecraft:tnt') {
@@ -523,9 +524,47 @@ mc.listen('onServerStarted', () => {
             }
         }
     });
-    mc.listen('onMobHurt', (m, s, d, c) => {
+    mc.listen('onMobHurt', (m, s, d, c) => {//实体受伤
         if (m.isPlayer()) {
-
+            //防止被自己队伍的tnt炸到
+            if(m.hasTag('red_ranks' && s.name=='red_tnt'){
+                return false;
+            }
+            if(m.hasTag('blue_ranks' && s.name=='blue_tnt'){
+                return false;
+            }
+        }
+    });
+    
+    mc.listen("onProjectileHitBlock",(bl,en)=>{//方块被弹射物击中
+        if(bl.type=='minecraft:wool'){//只能破坏羊毛
+        if(en.hasTag('red_arrow')){
+            if(shopRed.arrowEnhance==false){
+                bl.destroy(false);//破坏改方块
+                en.kill();
+            }
+            else{
+                
+            }
+        }
+        if(en.hasTag('blue_arrow')){
+            if(shopBlue.arrowEnhance==false){
+                bl.destroy(false);//破坏改方块
+                en.kill();
+            }
+            else{
+                
+            }
+        }
+        }
+    });
+    mc.listen("onProjectileCreated",(shooter,en)=>{//弹射物创建完毕
+        //给弹射物依据玩家标签增加标签
+        if(shooter.hasTag('red_ranks')){
+            en.addTag('red_arrow');
+        }
+        if(shooter.hasTag('blue_ranks')){
+            en.addTag('blue_arrow');
         }
     });
 
@@ -967,17 +1006,12 @@ mc.listen('onServerStarted', () => {
      * 胜利判断
      */
     function isVictory() {
-        if (ob_flag.getScore('red') >= 3) {
+        if (ob_flag.getScore('red') >= 3 || ob_flag.getScore('blue') >= 3) {
             gameEnd();
             gameData.game_prepare = true;
             setTimeout(game_prepare, 800);
-        }
-        if (ob_flag.getScore('blue') >= 3) {
-            gameEnd();
-            setTimeout(game_prepare, 800);
-            gameData.game_prepare = true;
             game_prepare();
-        }
+            
     }
 
     /**
@@ -1106,9 +1140,43 @@ mc.listen('onServerStarted', () => {
             //pl[i].getArmor().removeAllItems();
             pl[i].refreshItems();
         }
-        gameData.reload();
+        gameData.reload();//重置游戏变量
+        shop.reload();//重置增益商店变量
     }
-
+    
+    //增益商店变量
+    var shopRed = {
+        arrowEnhance = false;
+        blockEnhance = false;
+        absorption = false;//伤害吸收
+        rapidRebirth = false;//快速重生
+        flagCurse = false;//旗帜诅咒
+    }
+    var shopBlue = {
+        arrowEnhance = false;
+        blockEnhance = false;
+        absorption = false;//伤害吸收
+        rapidRebirth = false;//快速重生
+        flagCurse = false;//旗帜诅咒
+    }
+    //重置变量函数
+    var shop.reload = function (){
+        shopBlue = {
+        arrowEnhance = false;
+        blockEnhance = false;
+        absorption = false;//伤害吸收
+        rapidRebirth = false;//快速重生
+        flagCurse = false;//旗帜诅咒
+    }
+    shopRed = {
+        arrowEnhance = false;
+        blockEnhance = false;
+        absorption = false;//伤害吸收
+        rapidRebirth = false;//快速重生
+        flagCurse = false;//旗帜诅咒
+    }
+    }
+    
     /**
      * 增益商店表单
      */
@@ -1116,10 +1184,11 @@ mc.listen('onServerStarted', () => {
         let fm = mc.newSimpleForm();
         fm = fm.setTitle('增益商店');
         fm = fm.setContent('在这里购买增益');
-        fm = fm.addButton('§l§a血量增加\n§l§e100经济');
-        fm = fm.addButton('§l§a敌方夺旗者削弱\n§l§e100经济');
-        fm = fm.addButton('§l§a箭矢破坏范围提升\n§l§e100经济');
-        fm = fm.addButton('§l§a方块升级\n§l§e100经济');
+        fm = fm.addButton('§l§a箭升级\n§l§e125经济');
+        fm = fm.addButton('§l§a方块升级\n§l§e200经济');
+        fm = fm.addButton('§l§a伤害吸收\n§l§e250经济');
+        fm = fm.addButton('§l§a快速重生\n§l§e350经济');
+        fm = fm.addButton('§l§a旗帜诅咒\n§l§e200经济');
         return fm;
     }
     function form2Rt(pl,id){
@@ -1130,10 +1199,10 @@ mc.listen('onServerStarted', () => {
         }
         switch (id) {
             case 0:
-                if (money.get(pl.xuid) >= 100) {
-                    
-                    pl.tell('§o§7已购买§l§a血量增加');
-                    money.reduce(pl.xuid, 100);
+                if (money.get(pl.xuid) >= 125) {
+                    if(
+                    pl.tell('§o§7已购买§l§a箭升级');
+                    money.reduce(pl.xuid, 125);
                     break;
                 }
         }
