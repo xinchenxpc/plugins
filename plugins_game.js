@@ -1,5 +1,5 @@
 //LiteLoaderScript Dev Helper
-/// <reference path="d:\project/dts/llaids/src/index.d.ts"/> 
+/// <reference path="d:\plugins/dts/llaids/src/index.d.ts"/> 
 
 ll.registerPlugin(
     /* name */ "CTF",
@@ -485,12 +485,14 @@ mc.listen('onServerStarted', () => {
     //tnt爆炸
     mc.listen("onBlockChanged", (bl, bl2) => {//方块被爆炸破坏保护
         if (gameData.game_prepare) {
-            //log(bl.type != 'minecraft:wool' || bl.type != 'minecraft:tnt');
-            //log(bl.type != 'minecraft:wool');
-            if (bl.type != 'minecraft:wool' || bl.type != 'minecraft:tnt') {
-                if (bl2.type == 'minecraft:air') {
-                    mc.setBlock(bl.pos, bl);
-                    return false;
+            if (bl.type != 'minecraft:air') {
+                //log(bl.type != 'minecraft:wool' || bl.type != 'minecraft:tnt');
+                //log(bl.type != 'minecraft:wool');
+                if (bl.type != 'minecraft:wool' || bl.type != 'minecraft:tnt') {
+                    if (bl2.type == 'minecraft:air') {
+                        mc.setBlock(bl.pos, bl);
+                        return false;
+                    }
                 }
             }
         }
@@ -499,13 +501,18 @@ mc.listen('onServerStarted', () => {
     mc.listen("onEntityExplode", (_en, pos, _ra, _a, _b, _c) => {
         if (gameData.game_prepare) {
             setTimeout(() => {
-                mc.runcmdEx(`execute positioned ${pos.x} ${pos.y} ${pos.z} run kill @e[r=8},type=item]`);
-            }, 100);
+                mc.runcmdEx(`execute positioned ${Math.round(pos.x)} ${Math.round(pos.y)} ${Math.round(pos.z)} run kill @e[r=8},type=item]`);
+            }, 150);
         }
     });
     mc.listen("onDestroyBlock", (pl, bl) => {
         if (gameData.game_prepare) {
-            return false;
+            if (bl.type == 'minecraft:wool' || bl.type == 'minecraft:concrete') {
+                return true;
+            }
+            else {
+                return false;
+            }
         }
     });
 
