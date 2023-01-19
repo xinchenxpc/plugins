@@ -8,6 +8,8 @@ ll.registerPlugin(
     /* otherInformation */ {}
 );
 
+
+
 //导入函数
 try {
     var PlayerTeamData = ll.import('playerTeamData');
@@ -233,6 +235,7 @@ mc.listen('onServerStarted', () => {
     conf.close();
 
     mc.runcmdEx('gamerule doimmediaterespawn true');//立即重生
+    mc.runcmdEx('gamerule keepinventory true');//死亡不掉落
 
     //初始化计分板
     var ob_flag = new Score('flag');
@@ -363,7 +366,6 @@ mc.listen('onServerStarted', () => {
             else if (res['flag'] == 'blue') {//设置两队旗帜样式 NBTjson
                 let conf = new KVDatabase('./plugins/game');
                 log(ori.player.getHand().getNbt().toSNBT());
-                data = 'aa';
                 conf.set('blue_flag', ori.player.getHand().getNbt().toSNBT());
                 out.success(`设置成功 ${ori.player.getHand().getNbt().toSNBT()}`);
                 conf.close();
@@ -488,7 +490,9 @@ mc.listen('onServerStarted', () => {
             if (bl.type != 'minecraft:air') {
                 //log(bl.type != 'minecraft:wool' || bl.type != 'minecraft:tnt');
                 //log(bl.type != 'minecraft:wool');
-                if (bl.type != 'minecraft:wool' || bl.type != 'minecraft:tnt') {
+                //log(bl.type, bl2.type);
+                let list = ['minecraft:wool', 'minecraft:tnt', 'minecraft:concrete'];
+                if (list.indexOf(bl.type) === -1 ) {
                     if (bl2.type == 'minecraft:air') {
                         mc.setBlock(bl.pos, bl);
                         return false;
@@ -496,16 +500,16 @@ mc.listen('onServerStarted', () => {
                 }
             }
         }
-
+        return true;
     });
-    mc.listen("onEntityExplode", (_en, pos, _ra, _a, _b, _c) => {
+    mc.listen("onEntityExplode", (_en, pos, _ra, _a, _b, _c) => {//发生由实体引发的爆炸
         if (gameData.game_prepare) {
             setTimeout(() => {
-                mc.runcmdEx(`execute positioned ${Math.round(pos.x)} ${Math.round(pos.y)} ${Math.round(pos.z)} run kill @e[r=8},type=item]`);
-            }, 150);
+                mc.runcmdEx(`kill @e[type=item]`);
+            }, 80);
         }
     });
-    mc.listen("onDestroyBlock", (pl, bl) => {
+    mc.listen("onDestroyBlock", (pl, bl) => {//玩家破坏方块完成
         if (gameData.game_prepare) {
             if (bl.type == 'minecraft:wool' || bl.type == 'minecraft:concrete') {
                 return true;
@@ -612,15 +616,17 @@ mc.listen('onServerStarted', () => {
      * 准备
      */
     function game_prepare() {
+        mc.runcmdEx('gamerule pvp false');//关闭pvp
         //conf.close();
+        let red = entity_s(0);
+        let blue = entity_s(1);
         let conf = new KVDatabase('./plugins/game');
         pos1 = conf.get('pos1');
         pos2 = conf.get('pos2');
         pos1 = mc.newIntPos(pos1[0], pos1[1], pos1[2], 0);
         pos2 = mc.newIntPos(pos2[0], pos2[1], pos2[2], 0);
         conf.close();
-        let red = entity_s(0);
-        let blue = entity_s(1);
+
         data = true;
         //end_red = [];
         //end_blue = [];
@@ -695,6 +701,7 @@ mc.listen('onServerStarted', () => {
      * game_start
      */
     function gameStart() {
+        mc.runcmdEx('gamerule pvp true');//开启pvp
         //conf.close();
         conf = new KVDatabase('./plugins/game');
         gameData.game_start = true;
@@ -938,23 +945,30 @@ mc.listen('onServerStarted', () => {
         pos2 = conf.get('pos2');
         pos1 = mc.newIntPos(pos1[0], pos1[1], pos1[2], 0);
         pos2 = mc.newIntPos(pos2[0], pos2[1], pos2[2], 0);
+        let red_flag = conf.get('red_flag');
+        let blue_flag = conf.get('blue_flag');
+        var en;
+        log(red_flag, blue_flag);
+        log(NBT.parseSNBT(red_flag));
+        conf.close();
         if (num == 0) {
-            en = mc.spawnSimulatedPlayer('red', pos1);
+            mc.spawnSimulatedPlayer('red', pos1);
+            //en = mc.spawnMob('minecraft:armor_stand', pos1);
+            en = mc.getPlayer('red');
             en.addTag('game_red');
             en.setGameMode(1);
-            ct = en.getArmor();
-            ct.setItem(1, mc.newItem(NBT.parseSNBT(conf.get('red_flag'))));//通过string生成物品
+            let ct = en.getArmor();
+            ct.setItem(1, mc.newItem(NBT.parseSNBT(red_flag)));//通过string生成物品
             en.refreshItems();
         }
         else {
             en = mc.spawnSimulatedPlayer('blue', pos2);
             en.addTag('game_blue');
             en.setGameMode(1);
-            ct = en.getArmor();
-            ct.setItem(1, mc.newItem(NBT.parseSNBT(conf.get('blue_flag'))));
+            let ct = en.getArmor();
+            ct.setItem(1, mc.newItem(NBT.parseSNBT(blue_flag)));
             en.refreshItems();
         }
-        conf.close();
         return en;
     }
     /**
@@ -1147,9 +1161,12 @@ mc.listen('onServerStarted', () => {
         mc.getPlayer('red').simulateDisconnect();//模拟玩家退出游戏
         mc.getPlayer('blue').simulateDisconnect();
         for (let i = 0; i < pl.length; i++) {//清空玩家背包
-            pl[i].getInventory().removeAllItems();
-            //pl[i].getArmor().removeAllItems();
-            pl[i].refreshItems();
+            try {//好像有点bug，所以就这样了
+                pl[i].getArmor().removeAllItems();
+                pl[i].getInventory().removeAllItems();
+                pl[i].refreshItems();
+            }
+            catch (_e) { }
         }
         gameData.reload();//重置游戏变量
         shopReload();//重置增益商店变量
