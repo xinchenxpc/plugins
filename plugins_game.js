@@ -423,28 +423,32 @@ mc.listen('onServerStarted', () => {
                 mc.runcmdEx(`title ${pl.name} title §c§l你死了`);
                 mc.runcmdEx(`gamemode c ${pl.name}`);
                 mc.runcmdEx(`gamemode ${version} ${pl.name}`);//version是旁观模式的名字
-            }, 500);
+                //mc.runcmdEx(`tp ${pl.name} ${pl.lastDeathPos.x} ${pl.lastDeathPos.y} ${pl.lastDeathPos.z} ~`);//传送到死亡位置
+                pl.teleport(pl.lastDeathPos);
+            }, 1000);
         }
         return true;
     });
     mc.listen('onRespawn', (pl) => {//复活
         if (gameData.game_start) {
-            mc.runcmdEx(`tp ${pl.name} ${pl.lastDeathPos.x} ${pl.lastDeathPos.y} ${pl.lastDeathPos.z} ~`);//传送到死亡位置
             let id, id2, restime = gameData.RespawnTime;//复活时间 秒
-            id = setTimeout(() => {
-                mc.runcmdEx(`gamemode s ${pl.name}`);
-                pl.removeTag('die');
-                pl.tell('§a重生！', 5);
-            }, (gameData.RespawnTime * 1000));
+
             id2 = setInterval(() => {//复活倒计时
                 if (restime > 0) {
                     pl.tell(`§a${restime}§r秒后复活`, 5);
                     restime--;
                 }
                 else {
-                    clearInterval(id2);
+
                 }
             }, 1000);
+            id = setTimeout(() => {
+                pl.teleport(pl.getRespawnPosition());
+                mc.runcmdEx(`gamemode s ${pl.name}`);
+                pl.removeTag('die');
+                pl.tell('§a重生！', 5);
+                clearInterval(id2);
+            }, (gameData.RespawnTime * 1000));
         }
     });
     mc.listen('onAttackEntity', (pl, en) => {
@@ -492,7 +496,7 @@ mc.listen('onServerStarted', () => {
                 //log(bl.type != 'minecraft:wool');
                 //log(bl.type, bl2.type);
                 let list = ['minecraft:wool', 'minecraft:tnt', 'minecraft:concrete'];
-                if (list.indexOf(bl.type) === -1 ) {
+                if (list.indexOf(bl.type) === -1) {
                     if (bl2.type == 'minecraft:air') {
                         mc.setBlock(bl.pos, bl);
                         return false;
@@ -526,15 +530,18 @@ mc.listen('onServerStarted', () => {
             if (bl.type == 'minecraft:tnt') {
                 bl.destroy(false);//破坏改方块
                 /*log(String(bl.pos));//API有问题
-                var en = mc.spawnMob('minecraft:tnt',mc.newIntPos(bl.pos.x,bl.pos.y,bl.pos.z,0));
+                var en = mc.spawnMob('minecraft:armor_stand',bl.pos);
                 log(String(en));
                 */
 
                 if (pl.hasTag('red_ranks')) {
-                    mc.runcmdEx(`summon minecraft:tnt ${bl.pos.x} ${bl.pos.y} ${bl.pos.z} a red_tnt`)
+                    mc.runcmdEx(`summon minecraft:tnt ${bl.pos.x} ${bl.pos.y} ${bl.pos.z} red_tnt red_tnt`);
+                    mc.runcmdEx(`execute positioned ${bl.pos.x} ${bl.pos.y} ${bl.pos.z} run tag @e[type=minecraft:tnt,r=0.5] add red_tnt`);
                 }
                 if (pl.hasTag('blue_ranks')) {
-                    mc.runcmdEx(`summon minecraft:tnt ${bl.pos.x} ${bl.pos.y} ${bl.pos.z} a blue_tnt`)
+                    mc.runcmdEx(`summon minecraft:tnt ${bl.pos.x} ${bl.pos.y} ${bl.pos.z} blue_tnt blue_tnt`)
+                    log(mc.runcmdEx(`execute positioned ${bl.pos.x} ${bl.pos.y} ${bl.pos.z} run tag @e[type=minecraft:tnt,r=0.5] add blue_tnt`).output);
+
                 }
             }
         }
@@ -542,11 +549,17 @@ mc.listen('onServerStarted', () => {
     mc.listen('onMobHurt', (m, s, d, c) => {//实体受伤
         if (m.isPlayer()) {
             //防止被自己队伍的tnt炸到
-            if (m.hasTag('red_ranks') && s.name == 'red_tnt') {
-                return false;
+            //log(s.name,s.type);
+            try {
+                if (m.hasTag('red_ranks') && s.hasTag('red_tnt')) {
+                    return false;
+                }
+                if (m.hasTag('blue_ranks') && s.hasTag('blue_tnt')) {
+                    return false;
+                }
             }
-            if (m.hasTag('blue_ranks') && s.name == 'blue_tnt') {
-                return false;
+            catch (_e) {
+                return true;
             }
         }
     });
@@ -601,10 +614,10 @@ mc.listen('onServerStarted', () => {
         gameData.Health = false;
         let id = setInterval(() => {
             if (pl.maxHealth != pl.health) {
-                /*log('a ', pl.maxHealth, ' ', pl.health);
-                log(pl.name, pl.name);
-                log(mc.runcmdEx(`effect "${pl.name}" regeneration 1 3 true`).output);
-                */
+                //log('a ', pl.maxHealth, ' ', pl.health);
+                //log(pl.name, pl.name);
+                mc.runcmdEx(`effect "${pl.name}" regeneration 1 3 true`);
+
                 if (gameData.Health) {//实现回血可以打断
                     clearInterval(id);
                     gameData.Health = false;
@@ -782,8 +795,8 @@ mc.listen('onServerStarted', () => {
                     data[`§6§l完成进度§r(§oN/§c3§r)：`] = 5;
                     data[`§2绿队§r(${getFlagState('red')})： §a§l${String(ob_flag.getScore('red'))}`] = 6;
                     data[`§1蓝队§r(${getFlagState('blue')})： §a§l${String(ob_flag.getScore('blue'))}`] = 7;
-                    //log(data);
-                    player_list[j].removeSidebar();
+                    //log(data);食
+                    player_list[j].removeSidebar(); 重生
                     player_list[j].setSidebar('§l§6夺旗', data, 0);
                 }
                 if (player_list[j].hasTag('blue_ranks')) {
@@ -800,9 +813,12 @@ mc.listen('onServerStarted', () => {
                     player_list[j].setSidebar('§l§6夺旗', data, 0);
                 }
                 money.add(playerXuidList[j], 1);//每秒基础经济
-                /*if (player_list[j].isHungry) {//让玩家可以吃东西
-                    mc.runcmdEx(`effect "${player_list[j].name}" saturation 1 0 true`);
-                }*/
+                if (player_list[j].hasTag('red_carry') || player_list[j].hasTag('blue_carry')) {//拿到旗不能吃加速
+                    player_list[j].setHungry(20);//设置饥饿值
+                }
+                else{
+                    player_list[j].setHungry(19);//设置饥饿值
+                }
             }
 
             isVictory();//胜利判断
@@ -1031,7 +1047,19 @@ mc.listen('onServerStarted', () => {
      * 胜利判断
      */
     function isVictory() {
+        let playerList = mc.getOnlinePlayers();
+
         if (ob_flag.getScore('red') >= 3 || ob_flag.getScore('blue') >= 3) {
+            if (ob_flag.getScore('red') >= 3) {
+                for (let i = 0; i < playerList.length; i++) {
+                    playerList[i].setTitle('§l§2绿队 §6胜利！');
+                }
+            }
+            else {
+                for (let i = 0; i < playerList.length; i++) {
+                    playerList[i].setTitle('§l§1蓝队 §6胜利！');
+                }
+            }
             gameEnd();
             gameData.game_prepare = true;
             setTimeout(game_prepare, 800);
