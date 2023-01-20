@@ -761,17 +761,25 @@ mc.listen('onServerStarted', () => {
             ob_kill.setScore(player_list[j], 0);
             ob_die.setScore(player_list[j], 0);
 
-            //设置衣服
+            //设置衣服&初始装备
             if (player_list[j].hasTag('red_ranks')) {
                 for (let i = 0; i < red_clothes.length; i++) {
                     pl_ct.setItem(i, mc.newItem(NBT.parseSNBT(red_clothes[i])));
                 }
+                mc.runcmdEx(`give ${player_list[j].name} wool 36 13`);
+                //player_list[j].giveItem(mc.newItem('minecraft:wool',36).setAux(13));
             }
             if (player_list[j].hasTag('blue_ranks')) {
                 for (let i = 0; i < blue_clothes.length; i++) {
                     pl_ct.setItem(i, mc.newItem(NBT.parseSNBT(blue_clothes[i])));
                 }
+                mc.runcmdEx(`give ${player_list[j].name} wool 36 11`);
+                //player_list[j].giveItem(mc.newItem('minecraft:wool',36).setAux(11));
             }
+            player_list[j].giveItem(mc.newItem('minecraft:arrow',16));
+            player_list[j].giveItem(mc.newItem('minecraft:bow',1));
+            player_list[j].giveItem(mc.newItem('minecraft:stone_sword', 1));
+            //player_list[j].giveItem(mc.newItem('minecraft:shears', 1).setDamage(100000));
             player_list[j].refreshItems();
         }
 
@@ -795,8 +803,8 @@ mc.listen('onServerStarted', () => {
                     data[`§6§l完成进度§r(§oN/§c3§r)：`] = 5;
                     data[`§2绿队§r(${getFlagState('red')})： §a§l${String(ob_flag.getScore('red'))}`] = 6;
                     data[`§1蓝队§r(${getFlagState('blue')})： §a§l${String(ob_flag.getScore('blue'))}`] = 7;
-                    //log(data);食
-                    player_list[j].removeSidebar(); 重生
+                    //log(data);
+                    player_list[j].removeSidebar(); 
                     player_list[j].setSidebar('§l§6夺旗', data, 0);
                 }
                 if (player_list[j].hasTag('blue_ranks')) {
@@ -816,7 +824,7 @@ mc.listen('onServerStarted', () => {
                 if (player_list[j].hasTag('red_carry') || player_list[j].hasTag('blue_carry')) {//拿到旗不能吃加速
                     player_list[j].setHungry(20);//设置饥饿值
                 }
-                else{
+                else {
                     player_list[j].setHungry(19);//设置饥饿值
                 }
             }
@@ -1062,8 +1070,7 @@ mc.listen('onServerStarted', () => {
             }
             gameEnd();
             gameData.game_prepare = true;
-            setTimeout(game_prepare, 800);
-            game_prepare();
+            setTimeout(game_prepare, 1000);
         }
     }
 
