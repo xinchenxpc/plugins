@@ -402,7 +402,8 @@ mc.listen('onServerStarted', () => {
         if (gameData.game_start) {
             //pl.teleport(pl.pos.x, (pl.pos.y + 5), pl.pos.z, 0);
             //玩家死亡后清除相关的标签
-            pl.addScore('die', 1);
+            ob_die.addScore(pl, 1);
+            //pl.addScore('die', 1);
             pl.addTag('die');
             if (pl.hasTag('red_carry')) {
                 pl.removeTag('red_carry');
@@ -416,16 +417,19 @@ mc.listen('onServerStarted', () => {
                 if (en.isPlayer()) {
                     player = en.toPlayer();
                     log(player.name);
-                    player.addScore('kill', 1);//给杀死该玩家的人增加分数
+                    ob_kill.addScore(player, 1);
+                    //player.addScore('kill', 1);//给杀死该玩家的人增加分数
+                    money.add(player.xuid, 15);//增加经济
+                    player.tell(`§l§e击杀经济： §a15`);
                 }
             }
             let id2 = setTimeout(() => {//给死亡的玩家更改游戏模式 并显示文字
-                mc.runcmdEx(`title ${pl.name} title §c§l你死了`);
-                mc.runcmdEx(`gamemode c ${pl.name}`);
-                mc.runcmdEx(`gamemode ${version} ${pl.name}`);//version是旁观模式的名字
+                mc.runcmdEx(`title "${pl.name}" title §c§l你死了`);
+                //mc.runcmdEx(`gamemode c ${pl.name}`);
+                mc.runcmdEx(`gamemode ${version} "${pl.name}"`);//version是旁观模式的名字
                 //mc.runcmdEx(`tp ${pl.name} ${pl.lastDeathPos.x} ${pl.lastDeathPos.y} ${pl.lastDeathPos.z} ~`);//传送到死亡位置
-                pl.teleport(pl.lastDeathPos);
-            }, 1000);
+                //pl.teleport(pl.lastDeathPos);
+            }, 800);
         }
         return true;
     });
@@ -444,7 +448,7 @@ mc.listen('onServerStarted', () => {
             }, 1000);
             id = setTimeout(() => {
                 pl.teleport(pl.getRespawnPosition());
-                mc.runcmdEx(`gamemode s ${pl.name}`);
+                mc.runcmdEx(`gamemode s "${pl.name}"`);
                 pl.removeTag('die');
                 pl.tell('§a重生！', 5);
                 clearInterval(id2);
@@ -495,7 +499,7 @@ mc.listen('onServerStarted', () => {
                 //log(bl.type != 'minecraft:wool' || bl.type != 'minecraft:tnt');
                 //log(bl.type != 'minecraft:wool');
                 //log(bl.type, bl2.type);
-                let list = ['minecraft:wool', 'minecraft:tnt', 'minecraft:concrete'];
+                let list = ['minecraft:wool', 'minecraft:tnt'/*, 'minecraft:concrete'*/];
                 if (list.indexOf(bl.type) === -1) {
                     if (bl2.type == 'minecraft:air') {
                         mc.setBlock(bl.pos, bl);
@@ -563,7 +567,36 @@ mc.listen('onServerStarted', () => {
             }
         }
     });
-
+    mc.listen('onMobHurt', (m, s, d, c) => {//实体受伤
+        if (m.isPlayer()) {
+            try {//防止被自己队伍人的箭造成的伤害
+                if (m.hasTag('red_ranks') && s.hasTag('red_arrow')) {
+                    return false;
+                }
+                if (m.hasTag('blue_ranks') && s.hasTag('blue_arrow')) {
+                    return false;
+                }
+            }
+            catch (_e) {
+                return true;
+            }
+        }
+    });
+    mc.listen('onMobHurt', (m, s, d, c) => {//实体受伤
+        if (m.isPlayer()) {//防止自己队伍攻击伤害
+            try {
+                if (m.hasTag('red_ranks') && s.hasTag('red_ranks')) {
+                    return false;
+                }
+                if (m.hasTag('blue_ranks') && s.hasTag('blue_ranks')) {
+                    return false;
+                }
+            }
+            catch (_e) {
+                return true;
+            }
+        }
+    });
     mc.listen("onProjectileHitBlock", (bl, en) => {//方块被弹射物击中
         if (bl.type == 'minecraft:wool') {//只能破坏羊毛
             if (en.hasTag('red_arrow')) {
@@ -595,6 +628,30 @@ mc.listen('onServerStarted', () => {
             en.addTag('blue_arrow');
         }
     });
+    mc.listen("onBlockInteracted", (_pl, _bl) => {//方块接受玩家互动
+        if (gameData.game_start) {
+            return false;
+        }
+        else {
+            return true;
+        }
+    });
+
+    var placeBloockList = [];
+    mc.listen("afterPlaceBlock", (_pl, bl) => {//玩家放置方块
+        if (gameData.game_start) {
+            placeBloockList.push(bl);
+        }
+    });
+    /**
+     * 清除玩家放置的方块
+     */
+    function clearBlocks() {
+        for(let i = 0; i < placeBloockList.length; i++) {
+            placeBloockList[i].destroy(false);//破坏改方块
+        }
+        placeBloockList = [];
+    }
 
     /**弃用 被玩家吃东西玩成事件代替*/
     let funEat = Tools.exeOnceAtTime((pl, it) => {//吃东西
@@ -631,8 +688,7 @@ mc.listen('onServerStarted', () => {
     function game_prepare() {
         mc.runcmdEx('gamerule pvp false');//关闭pvp
         //conf.close();
-        let red = entity_s(0);
-        let blue = entity_s(1);
+
         let conf = new KVDatabase('./plugins/game');
         pos1 = conf.get('pos1');
         pos2 = conf.get('pos2');
@@ -641,7 +697,7 @@ mc.listen('onServerStarted', () => {
         conf.close();
 
         data = true;
-        //end_red = [];
+        //end_red = [];重生
         //end_blue = [];
         player_list = mc.getOnlinePlayers();
         let all_ranks = {}, start_num = 1;
@@ -652,9 +708,22 @@ mc.listen('onServerStarted', () => {
             player_list[i].getInventory().removeAllItems();
             player_list[i].getArmor().removeAllItems();
             player_list[i].refreshItems();
+            //清除标签
+            player_list[i].removeTag('red_ranks');
+            player_list[i].removeTag('blue_ranks');
         }
 
+        let playerNum = Math.round(player_list.length / 2);
+        for (let i = 0; i < playerNum; i++) {
+            player_list[i].addTag('red_ranks');
+        }
+        for (let i = 0; i < player_list.length; i++) {
+            if (player_list[i].hasTag('red_ranks') == false) {
+                player_list[i].addTag('blue_ranks');
+            }
+        }
 
+        /*
         try {
             red = TeamData('绿队').teamPl
             blue = TeamData('蓝队').teamPl
@@ -663,18 +732,20 @@ mc.listen('onServerStarted', () => {
                 player_list[i].removeTag('blue_ranks');
             }
             for (let i = 0; i < red.length; i++) {
-                red.addTag('red_ranks');
+                red[i].addTag('red_ranks');
             }
             for (let i = 0; i < blue.length; i++) {
-                blue.addTag('blue_ranks');
+                blue[i].addTag('blue_ranks');
             }
         }
         catch (e) {
             for (let j = 0; j < player_list.length; j++) {
-                player_list[j].tell('§e使用队伍插件分配队伍时出现问题，请使用/tag进行队伍分配,错误信息已输出至控制台');
+                player_list[j].tell('§e使用队伍插件分配队伍失败，请使用/tag进行队伍分配,错误信息已输出至控制台');
                 colorLog('red', e);
             }
-        }
+        }*/
+        let red = entity_s(0);//生成假人
+        let blue = entity_s(1);
         let id = setInterval(() => {
             let red_ranks = {}, blue_ranks = {}//实时显示队伍
             for (let j = 0; j < player_list.length; j++) {//分别筛选出两个队伍
@@ -760,28 +831,33 @@ mc.listen('onServerStarted', () => {
             money.set(player_list[j].xuid, 0);
             ob_kill.setScore(player_list[j], 0);
             ob_die.setScore(player_list[j], 0);
+            player_list[j].teleport(player_list[j].getRespawnPosition());//传送到重生坐标
 
             //设置衣服&初始装备
             if (player_list[j].hasTag('red_ranks')) {
                 for (let i = 0; i < red_clothes.length; i++) {
                     pl_ct.setItem(i, mc.newItem(NBT.parseSNBT(red_clothes[i])));
                 }
-                mc.runcmdEx(`give ${player_list[j].name} wool 36 13`);
+                mc.runcmdEx(`give "${player_list[j].name}" wool 36 13`);//队伍方块
                 //player_list[j].giveItem(mc.newItem('minecraft:wool',36).setAux(13));
             }
             if (player_list[j].hasTag('blue_ranks')) {
                 for (let i = 0; i < blue_clothes.length; i++) {
                     pl_ct.setItem(i, mc.newItem(NBT.parseSNBT(blue_clothes[i])));
                 }
-                mc.runcmdEx(`give ${player_list[j].name} wool 36 11`);
+                mc.runcmdEx(`give "${player_list[j].name} wool 36 11`);
                 //player_list[j].giveItem(mc.newItem('minecraft:wool',36).setAux(11));
             }
-            player_list[j].giveItem(mc.newItem('minecraft:arrow',16));
-            player_list[j].giveItem(mc.newItem('minecraft:bow',1));
+            player_list[j].setGameMode(0);
+            player_list[j].giveItem(mc.newItem('minecraft:arrow', 16));
+            player_list[j].giveItem(mc.newItem('minecraft:bow', 1));
             player_list[j].giveItem(mc.newItem('minecraft:stone_sword', 1));
             //player_list[j].giveItem(mc.newItem('minecraft:shears', 1).setDamage(100000));
             player_list[j].refreshItems();
         }
+
+        red_flag_player.setGameMode(1);//调回假人的游戏模式
+        blue_flag_player.setGameMode(1);
 
         let playerXuidList = [];
         for (let j = 0; j < player_list.length; j++) {//获取玩家xuid列表
@@ -804,7 +880,7 @@ mc.listen('onServerStarted', () => {
                     data[`§2绿队§r(${getFlagState('red')})： §a§l${String(ob_flag.getScore('red'))}`] = 6;
                     data[`§1蓝队§r(${getFlagState('blue')})： §a§l${String(ob_flag.getScore('blue'))}`] = 7;
                     //log(data);
-                    player_list[j].removeSidebar(); 
+                    player_list[j].removeSidebar();
                     player_list[j].setSidebar('§l§6夺旗', data, 0);
                 }
                 if (player_list[j].hasTag('blue_ranks')) {
@@ -923,32 +999,36 @@ mc.listen('onServerStarted', () => {
                 if (player_list[i].hasTag('red_carry')) {//绿队交付
                     //log(player_list[i].blockPos.x,' ',conf.get('pos1')[0],' ',RedGameTime);
                     if (!loop_red && player_list[i].blockPos.x == pos1.x && player_list[i].blockPos.y == pos1.y && player_list[i].blockPos.z == pos1.z) {
-                        player_list[i].removeTag('red_carry');
-                        blue.teleport(pos2);
-                        ob_flag.addScore('red', 1);
-                        for (let j = 0; j < player_list.length; j++) {
-                            if (player_list[j].hasTag('red_ranks')) {
-                                money.add(playerXuidList[j], 50);
-                                player_list[j].tell('§e交付奖励： §r§a§l50 §e§l§o金钱');
+                        if (red.blockPos.x == pos1.x && red.blockPos.y == pos1.y && red.blockPos.z == pos1.z) {
+                            player_list[i].removeTag('red_carry');
+                            blue.teleport(pos2);
+                            ob_flag.addScore('red', 1);
+                            for (let j = 0; j < player_list.length; j++) {
+                                if (player_list[j].hasTag('red_ranks')) {
+                                    money.add(playerXuidList[j], 50);
+                                    player_list[j].tell('§e交付奖励： §r§a§l50 §e§l§o金钱');
+                                }
                             }
+                            player_list[i].tell('§e额外奖励： §r§a§l100 §e§l§o金钱');
+                            money.add(player_list[i].xuid, 100);
                         }
-                        player_list[i].tell('§e额外奖励： §r§a§l100 §e§l§o金钱');
-                        money.add(player_list[i].xuid, 100);
                     }
                 }
                 if (player_list[i].hasTag('blue_carry')) {//蓝队交付
                     if (!loop_blue && player_list[i].blockPos.x == pos2.x && player_list[i].blockPos.y == pos2.y && player_list[i].blockPos.z == pos2.z) {
-                        player_list[i].removeTag('blue_carry');
-                        red.teleport(pos1);
-                        ob_flag.addScore('blue', 1);
-                        for (let j = 0; j < player_list.length; j++) {
-                            if (player_list[j].hasTag('blue_ranks')) {
-                                money.add(playerXuidList[j], 50);
-                                player_list[j].tell('§e交付奖励： §r§a§l50 §e§l§o金钱');
+                        if (blue.blockPos.x == pos1.x && blue.blockPos.y == pos1.y && blue.blockPos.z == pos1.z) {
+                            player_list[i].removeTag('blue_carry');
+                            red.teleport(pos1);
+                            ob_flag.addScore('blue', 1);
+                            for (let j = 0; j < player_list.length; j++) {
+                                if (player_list[j].hasTag('blue_ranks')) {
+                                    money.add(playerXuidList[j], 50);
+                                    player_list[j].tell('§e交付奖励： §r§a§l50 §e§l§o金钱');
+                                }
                             }
+                            player_list[i].tell('§e额外奖励： §r§a§l100 §e§l§o金钱');
+                            money.add(player_list[i].xuid, 100);
                         }
-                        player_list[i].tell('§e额外奖励： §r§a§l100 §e§l§o金钱');
-                        money.add(player_list[i].xuid, 100);
                     }
                 }
             }
@@ -1110,6 +1190,7 @@ mc.listen('onServerStarted', () => {
         }
     }
 
+
     /**
      * 获取圆形的边的坐标
      * @param {Number} a 横坐标
@@ -1190,9 +1271,11 @@ mc.listen('onServerStarted', () => {
             clearInterval(list[i]);
             delete gameData.setIntervalList[i];
         }
-        for (let i = 0; i < pl.length; i++) {
+        setTimeout(()=> {//侧边栏的循环是每秒一次
+            for (let i = 0; i < pl.length; i++) {
             pl[i].removeSidebar();
         }
+        },1080);
         mc.getPlayer('red').simulateDisconnect();//模拟玩家退出游戏
         mc.getPlayer('blue').simulateDisconnect();
         for (let i = 0; i < pl.length; i++) {//清空玩家背包
@@ -1205,6 +1288,7 @@ mc.listen('onServerStarted', () => {
         }
         gameData.reload();//重置游戏变量
         shopReload();//重置增益商店变量
+        clearBlocks();//清除所有放置的方块
     }
 
     //增益商店变量
@@ -1299,11 +1383,11 @@ mc.listen('onServerStarted', () => {
                     let item = mc.newItem('minecraft:wool', 16);
                     if (pl.hasTag('red_ranks')) {//设置数据值API不能用
                         //item.setAux(1);
-                        mc.runcmdEx(`give ${pl.name} wool 16 13`);
+                        mc.runcmdEx(`give "${pl.name}" wool 16 13`);
                     }
                     if (pl.hasTag('blue_ranks')) {
                         //item.setAux(2);
-                        mc.runcmdEx(`give ${pl.name} wool 16 11`);
+                        mc.runcmdEx(`give "${pl.name}" wool 16 11`);
                     }
                     //pl.giveItem(item);
                     pl.tell('§o§7已购买§l§a方块*16');
@@ -1319,7 +1403,7 @@ mc.listen('onServerStarted', () => {
                 }
             case 2:
                 if (money.get(pl.xuid) >= 40) {
-                    pl.giveItem(mc.newItem('minecraft:sweet_berries', 1)).setLore(['速度Ⅲ']);
+                    pl.giveItem(mc.newItem('minecraft:sweet_berries', 1));
                     pl.tell('§o§7已购买§l§a速度浆果*1');
                     money.reduce(pl.xuid, 40);
                     break;
@@ -1350,7 +1434,7 @@ mc.listen('onServerStarted', () => {
                 if (money.get(pl.xuid) >= 200) {
                     if (hasItem(pl, 'minecraft:diamond_sword') == -1) {//判断是否已有
                         if (hasItem(pl, 'minecraft:stone_sword') != -1) {//将石剑替换为铁剑
-                            plBag.setItem(hasItem(pl, 'minecraft:stone_sword'), mc.newItem('minecraft:iron_sword', 1));
+                            plBag.setItem(hasItem(pl, 'minecraft:stone_sword'), mc.newItem('minecraft:diamond_sword', 1));
                         }
                         else if (hasItem(pl, 'minecraft:iron_sword') != -1) {
                             plBag.setItem(hasItem(pl, 'minecraft:iron_sword'), mc.newItem('minecraft:diamond_sword', 1));
